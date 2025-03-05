@@ -1,0 +1,8 @@
+#!/bin/bash
+
+FILES="../z80.v"
+
+TB="./tb.v"
+
+vlog -vopt +acc -O5 -sv -incr ${FILES} ${TB}
+
