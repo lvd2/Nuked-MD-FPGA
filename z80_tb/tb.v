@@ -1,6 +1,5 @@
 `define HALF_CLK (0.5)
 
-`define START_PC (16'h8000)
 
 `timescale 1ns/100ps
 
@@ -115,7 +114,8 @@ module tb;
 	wire [ 7:0] ram_data_rd;
 	reg  [ 7:0] rom_data_rd;
 
-	assign zdata_i = (zaddr<16'h4000) ? rom_data_rd : ram_data_rd;
+	assign zdata_i = (!zmreq_n && !zmreq_z) ? ((zaddr<16'h4000) ? rom_data_rd : ram_data_rd) :
+	                 (!ziorq_n && !ziorq_z) ? ( zaddr[0] ? 8'hFF : 8'hBF ) : 8'hXX           ;
 
 	// RAM
 	ram ram
@@ -147,31 +147,61 @@ module tb;
 		end
 	end
 
+	integer stdout;
+	// print logs
+	initial
+	begin
+		`ifdef LOGFILE
+			stdout = $fopen(`LOGFILE,"wb");
+			if( !stdout )
+			begin
+				$display("%m: error opening log file %s!",`LOGFILE);
+				$stop();
+			end
+		`else // LOGFILE
+			stdout = $fopen("/dev/stdout","wb");
+			if( !stdout )
+			begin
+				$display("%m: error opening /dev/stdout!");
+				$stop();
+			end
+		`endif // LOGFILE
+
+	end
 
 	// small ROM
-	int halt=0;
 	always @*
 	begin
 		case(zaddr)
-		16'h0000: if( !halt ) rom_data_rd = 8'h31; // ld sp,fffd
-		          else rom_data_rd = 8'h76;
-		16'h0001: rom_data_rd = 8'hfd;
+		//////////////////////////////
+		16'h0000: rom_data_rd = 8'h31; // ld sp,fffd
+		16'h0001: rom_data_rd = 8'hff;
 		16'h0002: rom_data_rd = 8'hff;
 
-		16'h0003: begin rom_data_rd = 8'hc3; // jp 8000
-		          halt=1; end
+		16'h0003: rom_data_rd = 8'hcd; // call 8000
 		16'h0004: rom_data_rd = 8'h00;
 		16'h0005: rom_data_rd = 8'h80;
 
+		16'h0006: rom_data_rd = 8'h76; // halt
+
+		//////////////////////////////
+		16'h0010: rom_data_rd = 8'h32; // ld [1234],a
+		16'h0011: rom_data_rd = 8'h34;
+		16'h0012: rom_data_rd = 8'h12;
+
+		16'h0013: rom_data_rd = 8'hc9; // ret
+
+		//////////////////////////////
 		16'h1601: rom_data_rd = 8'hc9; // ret
 
-		16'h0010: rom_data_rd = 8'hc9; // ret
 
 		default: rom_data_rd = 8'hXX;
 		endcase
 	end
 
+
 	// rst 0x10 printer
+	wire mwr = !zmreq_n && !zmreq_z && !zwr_n && !zwr_z;
 	int skip=0;
 	initial
 	begin
@@ -179,20 +209,28 @@ module tb;
 
 		forever
 		begin
-			@(negedge zmreq_n);
-			if( !zmreq_z && !zm1_n && zaddr==16'h0010 )
+			@(posedge mwr);
+			if( mwr===1'b1 && zaddr==16'h1234 )
 			begin : print
 				reg [7:0] a;
+				a = zdata_wr;
 
 				if( !skip )
 				begin
-					a = z80cpu.regs[0][0]>>8;
 					if( a==13 )
-						$display(" ");
+						$fdisplay(stdout," ");
 					else if( a==23 )
+					begin
+						$fwrite(stdout," ");
 						skip=2;
-					else
-						$write("%c",a);
+					end
+					else if( a==127 ) // (c)
+						$fwrite(stdout,"%c%c",8'hc2,8'ha9);
+						//$fwrite(stdout,"%c",8'ha9);
+					else if( ^a!==1'bX )
+						$fwrite(stdout,"%c",a);
+
+					$fflush(stdout);
 				end
 				else
 					skip=skip-1;
@@ -200,11 +238,21 @@ module tb;
 		end
 	end
 
+
+	// count Z80 clocks
+	bit [63:0] clocks=0;
+	always @(posedge clk)
+	begin
+		if(clk===1'b1)
+			clocks++;
+	end
+
 	// stop condition
 	initial
 	begin
 		wait(rst_n===1'b1);
 		wait(zhalt_n===1'b0);
+		$display(">>> Test finished in %d clocks",clocks);
 		$stop;
 	end
 
