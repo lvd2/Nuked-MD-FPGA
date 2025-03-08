@@ -23,6 +23,7 @@ runsim () {
 	echo WORKDIR  $WORKDIR
 
 	rm -rf $WORKDIR
+	rm -f $LOGFILE
 
 	vlib $WORKDIR
 
@@ -36,7 +37,7 @@ for n in "${names[@]}"
 do
 	TESTFILE="${n}.out"
 	LOGFILE="${n}.log"
-	WORKDIR="${n}"
+	WORKDIR="${n}_work"
 
 	runsim $TESTFILE $LOGFILE $WORKDIR &
 
