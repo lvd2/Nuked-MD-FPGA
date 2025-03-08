@@ -252,7 +252,8 @@ module tb;
 	begin
 		wait(rst_n===1'b1);
 		wait(zhalt_n===1'b0);
-		$display(">>> Test finished in %d clocks",clocks);
+		$fdisplay(stdout," ");
+		$fdisplay(stdout,">>> Test finished in %d clocks",clocks);
 		$stop;
 	end
 
