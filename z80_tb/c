@@ -2,7 +2,7 @@
 
 FILES="../z80.v"
 
-TB="./tb.v"
+TB="./tb.v ./ram.v"
 
-vlog -vopt +acc -O5 -sv -incr ${FILES} ${TB}
+vlog +define+TESTFILE=\"z80doc.out\" -vopt +acc -O5 -sv -incr ${FILES} ${TB}
 
