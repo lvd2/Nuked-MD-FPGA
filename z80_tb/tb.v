@@ -149,14 +149,17 @@ module tb;
 
 
 	// small ROM
+	int halt=0;
 	always @*
 	begin
 		case(zaddr)
-		16'h0000: rom_data_rd = 8'h31; // ld sp,fffd
+		16'h0000: if( !halt ) rom_data_rd = 8'h31; // ld sp,fffd
+		          else rom_data_rd = 8'h76;
 		16'h0001: rom_data_rd = 8'hfd;
 		16'h0002: rom_data_rd = 8'hff;
 
-		16'h0003: rom_data_rd = 8'hc3; // jp 8000
+		16'h0003: begin rom_data_rd = 8'hc3; // jp 8000
+		          halt=1; end
 		16'h0004: rom_data_rd = 8'h00;
 		16'h0005: rom_data_rd = 8'h80;
 
@@ -169,6 +172,7 @@ module tb;
 	end
 
 	// rst 0x10 printer
+	int skip=0;
 	initial
 	begin
 		wait(rst_n===1'b1);
@@ -177,11 +181,31 @@ module tb;
 		begin
 			@(negedge zmreq_n);
 			if( !zmreq_z && !zm1_n && zaddr==16'h0010 )
-			begin
-				$write("%c",z80cpu.regs[0][0]>>8);
-				//$stop;
+			begin : print
+				reg [7:0] a;
+
+				if( !skip )
+				begin
+					a = z80cpu.regs[0][0]>>8;
+					if( a==13 )
+						$display(" ");
+					else if( a==23 )
+						skip=2;
+					else
+						$write("%c",a);
+				end
+				else
+					skip=skip-1;
 			end
 		end
+	end
+
+	// stop condition
+	initial
+	begin
+		wait(rst_n===1'b1);
+		wait(zhalt_n===1'b0);
+		$stop;
 	end
 
 endmodule
